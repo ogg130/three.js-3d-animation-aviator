@@ -52,6 +52,7 @@ var Colors = {
     pink:0xF5986E,
     yellow:0xf4ce93,
     blue:0x68c3c0,
+    green: 0x32CD32,
     blueDark:0x0000FF,
 
 };
@@ -641,6 +642,20 @@ Cloud.prototype.rotate = function(){
   }
 }
 
+Enemy = function(){
+  var geom = new THREE.TorusKnotBufferGeometry( 5, 1, 100, 16 );
+  var mat = new THREE.MeshPhongMaterial({
+    color:Colors.green,
+    shininess:0,
+    specular:0xffffff,
+    shading:THREE.FlatShading
+  });
+  this.mesh = new THREE.Mesh(geom,mat);
+  this.mesh.castShadow = true;
+  this.angle = 0;
+  this.dist = 0;
+}
+
 Ennemy = function(){
   var geom = new THREE.TetrahedronGeometry(8,2);
   var mat = new THREE.MeshPhongMaterial({
@@ -668,7 +683,7 @@ EnnemiesHolder.prototype.spawnEnnemies = function(){
     if (ennemiesPool.length) {
       ennemy = ennemiesPool.pop();
     }else{
-      ennemy = new Ennemy();
+      ennemy = new Enemy();
     }
 
     ennemy.angle = - (i*0.1);
@@ -695,9 +710,13 @@ EnnemiesHolder.prototype.rotateEnnemies = function(){
 
     //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
     var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
-    var gunPos = gunShot.mesh.position.clone().sub(ennemy.mesh.position.clone());
+    var gunPos, g;
+    if (gunShot !== undefined) {
+      gunPos = gunShot.mesh.position.clone().sub(ennemy.mesh.position.clone());
+      g = gunPos.length();
+    }
     var d = diffPos.length();
-    var g = gunPos.length();
+    
     if (d<game.ennemyDistanceTolerance){
       particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
 
