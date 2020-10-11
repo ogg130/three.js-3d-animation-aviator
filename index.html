@@ -20,15 +20,28 @@
 		<script type="text/javascript" src="js/TweenMax.min.js"></script>
     <script type="text/javascript" src="js/three.js"></script>
             <div id="world">
-              <div class="message message--replay" id="replayMessage">Click to Replay</div>
-              <div class="score__content" id="energy">
-                <div class="score__label">energy</div>
-                <div class="score__value score__value--energy" id="energyValue">
-                  <div class="energy-bar" id="energyBar"></div>
+              <div class="score" id="score">
+                <div class="score__content" id="level">
+                  <div class="score__label">level</div>
+                  <div class="score__value score__value--level" id="levelValue">1</div>
+                  <svg class="level-circle" id="levelCircle" viewbox="0 0 200 200">
+                    <circle id="levelCircleBgr" r="80" cx="100" cy="100" fill="none" stroke="#d1b790" stroke-width="24px" />
+                    <circle id="levelCircleStroke" r="80" cx="100" cy="100" fill="none" #f25346 stroke="#68c3c0" stroke-width="14px" stroke-dasharray="502" />
+                  </svg>
+                </div>
+                <div class="score__content" id="dist">
+                  <div class="score__label">distance</div>
+                  <div class="score__value score__value--dist" id="distValue">000</div>
+                </div>
+                <div class="score__content" id="energy">
+                  <div class="score__label">energy</div>
+                  <div class="score__value score__value--energy" id="energyValue">
+                    <div class="energy-bar" id="energyBar"></div>
+                  </div>
                 </div>
               </div>
             </div>
-            </div>
+            <div class="message message--replay" id="replayMessage">Click to Replay</div>
         <script>
 //COLORS
 var Colors = {
@@ -115,7 +128,7 @@ function resetGame(){
 
           status : "playing",
          };
-  //fieldLevel.innerHTML = Math.floor(game.level);
+  fieldLevel.innerHTML = Math.floor(game.level);
 }
 
 //THREEJS RELATED VARIABLES
@@ -906,10 +919,10 @@ function loop(){
     //  coinsHolder.spawnCoins();
    // }
 
-    //if (Math.floor(game.distance)%game.distanceForSpeedUpdate == 0 && Math.floor(game.distance) > game.speedLastUpdate){
-    //  game.speedLastUpdate = Math.floor(game.distance);
-    //  game.targetBaseSpeed += game.incrementSpeedByTime*deltaTime;
-   // }
+    if (Math.floor(game.distance)%game.distanceForSpeedUpdate == 0 && Math.floor(game.distance) > game.speedLastUpdate){
+      game.speedLastUpdate = Math.floor(game.distance);
+      game.targetBaseSpeed += game.incrementSpeedByTime*deltaTime;
+    }
 
 
     if (Math.floor(game.distance)%game.distanceForEnnemiesSpawn == 0 && Math.floor(game.distance) > game.ennemyLastSpawn){
@@ -920,7 +933,7 @@ function loop(){
     if (Math.floor(game.distance)%game.distanceForLevelUpdate == 0 && Math.floor(game.distance) > game.levelLastUpdate){
       game.levelLastUpdate = Math.floor(game.distance);
       game.level++;
-      //fieldLevel.innerHTML = Math.floor(game.level);
+      fieldLevel.innerHTML = Math.floor(game.level);
 
       game.targetBaseSpeed = game.initSpeed + game.incrementSpeedByLevel*game.level
     }
@@ -970,16 +983,16 @@ function loop(){
 
 function updateDistance(){
   game.distance += game.speed*deltaTime*game.ratioSpeedDistance;
-  //fieldDistance.innerHTML = Math.floor(game.distance);
-  //var d = 502*(1-(game.distance%game.distanceForLevelUpdate)/game.distanceForLevelUpdate);
-  //levelCircle.setAttribute("stroke-dashoffset", d);
+  fieldDistance.innerHTML = Math.floor(game.distance);
+  var d = 502*(1-(game.distance%game.distanceForLevelUpdate)/game.distanceForLevelUpdate);
+  levelCircle.setAttribute("stroke-dashoffset", d);
 
 }
 
 var blinkEnergy=false;
 
 function updateEnergy(){
-  game.energy -= game.speed*deltaTime*game.ratioSpeedEnergy;
+  //game.energy -= game.speed*deltaTime*game.ratioSpeedEnergy;
   game.energy = Math.max(0, game.energy);
   energyBar.style.right = (100-game.energy)+"%";
   energyBar.style.backgroundColor = (game.energy<50)? "#f25346" : "#68c3c0";
