@@ -10,7 +10,7 @@
                 width: 100%;
                 height: 100%;
                 overflow: hidden;
-                background: linear-gradient(#0c0c0c, #797775);
+                background: linear-gradient( #797775, #0c0c0c);
             }
 		</style>
 	</head>
@@ -18,14 +18,87 @@
         <script type="text/javascript" src="js/three.js"></script>
         <div id="world"></div>
         <script>
+
+            var mousePos;
+
                 var Colors = {
                     red:0xf25346,
-                    white:0xd8d0d1,
+                    white:0xFFFFFF,
                     brown:0x59332e,
                     pink:0xF5986E,
                     brownDark:0x23190f,
                     blue:0x68c3c0,
+                    blueDark:0x0000FF
                 };
+                var game;
+                var deltaTime = 0;
+var newTime = new Date().getTime();
+var oldTime = new Date().getTime();
+
+                var ennemiesPool = [];
+var particlesPool = [];
+var particlesInUse = [];
+
+game = {speed:0,
+          initSpeed:.00035,
+          baseSpeed:.00035,
+          targetBaseSpeed:.00035,
+          incrementSpeedByTime:.0000025,
+          incrementSpeedByLevel:.000005,
+          distanceForSpeedUpdate:100,
+          speedLastUpdate:0,
+
+          distance:0,
+          ratioSpeedDistance:50,
+          energy:100,
+          ratioSpeedEnergy:3,
+
+          level:1,
+          levelLastUpdate:0,
+          distanceForLevelUpdate:1000,
+
+          planeDefaultHeight:100,
+          planeAmpHeight:80,
+          planeAmpWidth:75,
+          planeMoveSensivity:0.005,
+          planeRotXSensivity:0.0008,
+          planeRotZSensivity:0.0004,
+          planeFallSpeed:.001,
+          planeMinSpeed:1.2,
+          planeMaxSpeed:1.6,
+          planeSpeed:0,
+          planeCollisionDisplacementX:0,
+          planeCollisionSpeedX:0,
+
+          planeCollisionDisplacementY:0,
+          planeCollisionSpeedY:0,
+
+          seaRadius:600,
+          seaLength:800,
+          //seaRotationSpeed:0.006,
+          wavesMinAmp : 5,
+          wavesMaxAmp : 20,
+          wavesMinSpeed : 0.001,
+          wavesMaxSpeed : 0.003,
+
+          cameraFarPos:500,
+          cameraNearPos:150,
+          cameraSensivity:0.002,
+
+          coinDistanceTolerance:15,
+          coinValue:3,
+          coinsSpeed:.5,
+          coinLastSpawn:0,
+          distanceForCoinsSpawn:100,
+
+          ennemyDistanceTolerance:10,
+          ennemyValue:10,
+          ennemiesSpeed:.6,
+          ennemyLastSpawn:0,
+          distanceForEnnemiesSpawn:50,
+
+          status : "playing",
+         };
 
                 window.addEventListener('load', init, false);
 
@@ -33,11 +106,14 @@
                     createScene();
                     createLights();
                     createPlane();
+                    createEnnemies();
+                    createParticles();
                     createSea();
                     createSky();
 
                     //add the listener
                     document.addEventListener('mousemove', handleMouseMove, false);
+                    document.addEventListener('click', handleClick, false);
                     
                     loop();
                 }
@@ -123,7 +199,7 @@
                     // A hemisphere light is a gradient colored light; 
                     // the first parameter is the sky color, the second parameter is the ground color, 
                     // the third parameter is the intensity of the light
-                    hemisphereLight = new THREE.HemisphereLight(0x0000FF,0x00FFFF, .5)
+                    hemisphereLight = new THREE.HemisphereLight(0x0000FF,0xffffff, .5)
                     
                     // A directional light shines from a specific direction. 
                     // It acts like the sun, that means that all the rays produced are parallel. 
@@ -242,13 +318,44 @@ Sea.prototype.moveWaves = function (){
                     scene.add(sea.mesh);
                 }
 
+                GunShot = function() {
+                    this.mesh = new THREE.Object3D();
+                    this.mesh.name = "gunShot";
+
+                    var geometry = new THREE.BoxGeometry( 1, 20, 1  );
+                    var material = new THREE.MeshBasicMaterial( {color: 0xff0000} );
+
+                    var gunShot = new THREE.Mesh(geometry, material);
+                    gunShot.rotation.z = Math.PI / 2;
+                    
+                    this.mesh.add(gunShot);
+
+                   // scene.add(gunShot.mesh);
+                }
+                var gunShot;
+
+                function updateGunShot() {
+
+                    var targetY = normalize(mousePos.y,-.75,.75,25, 175); // Last two params are top / bottom
+                    var targetX = normalize(mousePos.x,-.75,.75,-100, 100);
+
+                    // Move the gunshot at each frame by adding a fraction of the remaining distance
+                    if (gunShot != undefined){
+                        gunShot.mesh.position.x += 50;
+                        gunShot.mesh.position.y = targetY;
+                    } 
+
+
+}
+
+
                 Cloud = function(){
                     // Create an empty container that will hold the different parts of the cloud
                     this.mesh = new THREE.Object3D();
                     
                     // create a cube geometry;
                     // this shape will be duplicated to create the cloud
-                    var geom = new THREE.BoxGeometry(20,20,20);
+                    var geom = new THREE.SphereGeometry( 20, 30, 20 );
                     
                     // create a material; a simple white material will do the trick
                     var mat = new THREE.MeshPhongMaterial({
@@ -282,13 +389,142 @@ Sea.prototype.moveWaves = function (){
                     } 
                 }
 
+                Ennemy = function(){
+  var geom = new THREE.TetrahedronGeometry(8,2);
+  var mat = new THREE.MeshPhongMaterial({
+    color:Colors.red,
+    shininess:0,
+    specular:0xffffff,
+    shading:THREE.FlatShading
+  });
+  this.mesh = new THREE.Mesh(geom,mat);
+  this.mesh.castShadow = true;
+  this.angle = 0;
+  this.dist = 0;
+}
+
+EnnemiesHolder = function (){
+  this.mesh = new THREE.Object3D();
+  this.ennemiesInUse = [];
+}
+
+EnnemiesHolder.prototype.spawnEnnemies = function(){
+  var nEnnemies = game.level;
+
+  for (var i=0; i<nEnnemies; i++){
+    var ennemy;
+ 
+    if (ennemiesPool.length) {
+      ennemy = ennemiesPool.pop();
+    }else{
+      ennemy = new Ennemy();
+    }
+
+    ennemy.angle = - (i*0.1);
+    ennemy.distance = game.seaRadius + game.planeDefaultHeight + (-1 + Math.random() * 2) * (game.planeAmpHeight-20);
+    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.position.x = Math.cos(ennemy.angle)*ennemy.distance;
+
+    this.mesh.add(ennemy.mesh);
+    this.ennemiesInUse.push(ennemy);
+  }
+}
+
+EnnemiesHolder.prototype.rotateEnnemies = function(){
+  for (var i=0; i<this.ennemiesInUse.length; i++){
+    var ennemy = this.ennemiesInUse[i];
+    ennemy.angle += game.speed*deltaTime*game.ennemiesSpeed;
+
+    if (ennemy.angle > Math.PI*2) ennemy.angle -= Math.PI*2;
+
+    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.position.x = Math.cos(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.rotation.z += Math.random()*.1;
+    ennemy.mesh.rotation.y += Math.random()*.1;
+
+    //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
+    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
+    var d = diffPos.length();
+    if (d<game.ennemyDistanceTolerance){
+      particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+
+      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+      this.mesh.remove(ennemy.mesh);
+      game.planeCollisionSpeedX = 100 * diffPos.x / d;
+      game.planeCollisionSpeedY = 100 * diffPos.y / d;
+      ambientLight.intensity = 2;
+
+      removeEnergy();
+      i--;
+    }else if (ennemy.angle > Math.PI){
+      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+      this.mesh.remove(ennemy.mesh);
+      i--;
+    }
+  }
+}
+
+Particle = function(){
+  var geom = new THREE.TetrahedronGeometry(3,0);
+  var mat = new THREE.MeshPhongMaterial({
+    color:0x009999,
+    shininess:0,
+    specular:0xffffff,
+    shading:THREE.FlatShading
+  });
+  this.mesh = new THREE.Mesh(geom,mat);
+}
+
+Particle.prototype.explode = function(pos, color, scale){
+  var _this = this;
+  var _p = this.mesh.parent;
+  this.mesh.material.color = new THREE.Color( color);
+  this.mesh.material.needsUpdate = true;
+  this.mesh.scale.set(scale, scale, scale);
+  var targetX = pos.x + (-1 + Math.random()*2)*50;
+  var targetY = pos.y + (-1 + Math.random()*2)*50;
+  var speed = .6+Math.random()*.2;
+  TweenMax.to(this.mesh.rotation, speed, {x:Math.random()*12, y:Math.random()*12});
+  TweenMax.to(this.mesh.scale, speed, {x:.1, y:.1, z:.1});
+  TweenMax.to(this.mesh.position, speed, {x:targetX, y:targetY, delay:Math.random() *.1, ease:Power2.easeOut, onComplete:function(){
+      if(_p) _p.remove(_this.mesh);
+      _this.mesh.scale.set(1,1,1);
+      particlesPool.unshift(_this);
+    }});
+}
+
+ParticlesHolder = function (){
+  this.mesh = new THREE.Object3D();
+  this.particlesInUse = [];
+}
+
+ParticlesHolder.prototype.spawnParticles = function(pos, density, color, scale){
+
+  var nPArticles = density;
+  for (var i=0; i<nPArticles; i++){
+    var particle;
+    if (particlesPool.length) {
+      particle = particlesPool.pop();
+    }else{
+      particle = new Particle();
+    }
+    this.mesh.add(particle.mesh);
+    particle.mesh.visible = true;
+    var _this = this;
+    particle.mesh.position.y = pos.y;
+    particle.mesh.position.x = pos.x;
+    particle.explode(pos,color, scale);
+  }
+}
+
+
                 // Define a Sky Object
                 Sky = function(){
                     // Create an empty container
                     this.mesh = new THREE.Object3D();
                     
                     // choose a number of clouds to be scattered in the sky
-                    this.nClouds = 20;
+                    this.nClouds = 13;
                     
                     // To distribute the clouds consistently,
                     // we need to place them according to a uniform angle
@@ -336,6 +572,28 @@ Sea.prototype.moveWaves = function (){
                     scene.add(sky.mesh);
                 }
 
+
+                function createEnnemies(){
+  for (var i=0; i<10; i++){
+    var ennemy = new Ennemy();
+    ennemiesPool.push(ennemy);
+  }
+  ennemiesHolder = new EnnemiesHolder();
+  //ennemiesHolder.mesh.position.y = -game.seaRadius;
+  scene.add(ennemiesHolder.mesh)
+}
+
+function createParticles(){
+  for (var i=0; i<10; i++){
+    var particle = new Particle();
+    particlesPool.push(particle);
+  }
+  particlesHolder = new ParticlesHolder();
+  //ennemiesHolder.mesh.position.y = -game.seaRadius;
+  scene.add(particlesHolder.mesh)
+}
+
+
                 var AirPlane = function(){
   this.mesh = new THREE.Object3D();
   this.mesh.name = "airPlane";
@@ -343,7 +601,7 @@ Sea.prototype.moveWaves = function (){
   // Cabin
 
   var geomCabin = new THREE.BoxGeometry(80,50,50,1,1,1);
-  var matCabin = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var matCabin = new THREE.MeshPhongMaterial({color:Colors.blueDark, shading:THREE.FlatShading});
 
   geomCabin.vertices[4].y-=10;
   geomCabin.vertices[4].z+=20;
@@ -372,7 +630,7 @@ Sea.prototype.moveWaves = function (){
   // Tail Plane
 
   var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
-  var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.blueDark, shading:THREE.FlatShading});
   var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
   tailPlane.position.set(-40,20,0);
   tailPlane.castShadow = true;
@@ -382,7 +640,7 @@ Sea.prototype.moveWaves = function (){
   // Wings
 
   var geomSideWing = new THREE.BoxGeometry(30,5,120,1,1,1);
-  var matSideWing = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var matSideWing = new THREE.MeshPhongMaterial({color:Colors.blueDark, shading:THREE.FlatShading});
   var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
   sideWing.position.set(0,15,0);
   sideWing.castShadow = true;
@@ -434,7 +692,7 @@ Sea.prototype.moveWaves = function (){
   this.mesh.add(this.propeller);
 
   var wheelProtecGeom = new THREE.BoxGeometry(30,15,10,1,1,1);
-  var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var wheelProtecMat = new THREE.MeshPhongMaterial({color:Colors.blueDark, shading:THREE.FlatShading});
   var wheelProtecR = new THREE.Mesh(wheelProtecGeom,wheelProtecMat);
   wheelProtecR.position.set(25,-20,25);
   this.mesh.add(wheelProtecR);
@@ -466,7 +724,7 @@ Sea.prototype.moveWaves = function (){
 
   var suspensionGeom = new THREE.BoxGeometry(4,20,4);
   suspensionGeom.applyMatrix(new THREE.Matrix4().makeTranslation(0,10,0))
-  var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+  var suspensionMat = new THREE.MeshPhongMaterial({color:Colors.blueDark, shading:THREE.FlatShading});
   var suspension = new THREE.Mesh(suspensionGeom,suspensionMat);
   suspension.position.set(-35,-5,0);
   suspension.rotation.z = -.3;
@@ -483,6 +741,12 @@ Sea.prototype.moveWaves = function (){
 };
 var airplane;
 
+            function createGunShot(yPos){
+                gunShot = new GunShot();
+                gunShot.mesh.position.y = yPos;
+                scene.add(gunShot.mesh);
+            }
+
             function createPlane(){ 
                 airplane = new AirPlane();
                 airplane.mesh.scale.set(.25,.25,.25);
@@ -491,13 +755,27 @@ var airplane;
             }
 
             function loop(){
+
+                newTime = new Date().getTime();
+                deltaTime = newTime-oldTime;
+                oldTime = newTime;
+
+
                 sea.mesh.rotation.z += .005;
                 sky.mesh.rotation.z += .01;
                 sea.moveWaves();
+                        var x = Math.floor(game.distance)%game.distanceForEnnemiesSpawn;
+                        var y = Math.floor(game.distance);
+                        //if ( x == 0 && y > game.ennemyLastSpawn){                
+                        if ( x == 0){
+      game.ennemyLastSpawn = Math.floor(game.distance);
+      ennemiesHolder.spawnEnnemies();
+    }
 
                 // update the plane on each frame
                 updatePlane();
-                
+                updateGunShot();
+                ennemiesHolder.rotateEnnemies();
                 renderer.render(scene, camera);
                 requestAnimationFrame(loop);
             }
@@ -505,7 +783,6 @@ var airplane;
             var mousePos={x:0, y:0};
 
             // now handle the mousemove event
-
             function handleMouseMove(event) {
 
                 // here we are converting the mouse position value received 
@@ -521,19 +798,31 @@ var airplane;
                 mousePos = {x:tx, y:ty};
 
             }
+
+
+            function handleClick(event) {
+
+                yPos = normalize(mousePos.y,-.75,.75,25, 175); // Last two params are top / bottom
+                createGunShot(yPos);
+                
+
+                
+            }
+
             function updatePlane(){
 
-                var targetY = normalize(mousePos.y,-.75,.75,25, 175);
-                var targetX = normalize(mousePos.x,-.75,.75,-100, 100);
+                var targetY = normalize(mousePos.y,-.75,.75,25, 175); // Last two params are top / bottom
+                var targetX = normalize(mousePos.x,-.75,.75,-200, 200);
                 
                 // Move the plane at each frame by adding a fraction of the remaining distance
                 airplane.mesh.position.y += (targetY-airplane.mesh.position.y)*0.1;
+                airplane.mesh.position.x += (targetX-airplane.mesh.position.x)*0.1;
 
                 // Rotate the plane proportionally to the remaining distance
                 airplane.mesh.rotation.z = (targetY-airplane.mesh.position.y)*0.0128;
                 airplane.mesh.rotation.x = (airplane.mesh.position.y-targetY)*0.0064;
 
-                airplane.propeller.rotation.x += 0.3;
+                airplane.propeller.rotation.x += 0.1;
 
                 airplane.pilot.updateHairs();
             }
